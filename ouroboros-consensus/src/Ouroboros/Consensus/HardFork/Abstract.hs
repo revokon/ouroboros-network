@@ -5,7 +5,7 @@ module Ouroboros.Consensus.HardFork.Abstract (
     HasHardForkHistory(..)
   ) where
 
-import           Ouroboros.Consensus.HardFork.History as HardFork
+import qualified Ouroboros.Consensus.HardFork.History as HardFork
 import           Ouroboros.Consensus.Ledger.Abstract
 
 class HasHardForkHistory blk where

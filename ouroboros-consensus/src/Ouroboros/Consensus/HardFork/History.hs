@@ -206,7 +206,7 @@ data EraParams = EraParams {
     , eraSlotLength :: !SlotLength
     , eraSafeZone   :: !SafeZone
     }
-  deriving stock    (Show, Generic)
+  deriving stock    (Show, Eq, Generic)
   deriving anyclass (NoUnexpectedThunks)
 
 -- | Default 'EraParams'
@@ -236,7 +236,7 @@ data SafeZone = SafeZone {
       -- | Optionally, an 'EpochNo' before which no hard fork can take place
     , safeBeforeEpoch :: !SafeBeforeEpoch
     }
-  deriving stock    (Show, Generic)
+  deriving stock    (Show, Eq, Generic)
   deriving anyclass (NoUnexpectedThunks)
 
 -- | Lower bound on when a transition can take place
@@ -279,7 +279,7 @@ data SafeBeforeEpoch =
     -- This constructor can be regarded as an " extreme " version of
     -- 'LowerBound', and can be used for similar reasons.
   | UnsafeUnbounded
-  deriving stock    (Show, Generic)
+  deriving stock    (Show, Eq, Generic)
   deriving anyclass (NoUnexpectedThunks)
 
 -- | The shape of the chain (old to new)
@@ -330,7 +330,8 @@ data Bound = Bound {
     , boundSlot  :: !SlotNo
     , boundEpoch :: !EpochNo
     }
-  deriving (Show, Eq)
+  deriving stock    (Show, Eq, Generic)
+  deriving anyclass (NoUnexpectedThunks)
 
 initBound :: SystemStart -> Bound
 initBound (SystemStart start) = Bound {
@@ -379,7 +380,8 @@ data EraSummary = EraSummary {
     , eraEnd    :: !EraEnd    -- ^ Exclusive upper bound
     , eraParams :: !EraParams -- ^ Active parameters
     }
-  deriving (Show)
+  deriving stock    (Show, Eq, Generic)
+  deriving anyclass (NoUnexpectedThunks)
 
 -- | Exclusive upper bound on the era
 data EraEnd =
@@ -390,7 +392,8 @@ data EraEnd =
     --
     -- This arises from the use of 'UnsafeUnbounded'.
   | EraUnbounded
-  deriving (Show)
+  deriving stock    (Show, Eq, Generic)
+  deriving anyclass (NoUnexpectedThunks)
 
 -- | Summary of the /confirmed/ part of the ledger
 --
