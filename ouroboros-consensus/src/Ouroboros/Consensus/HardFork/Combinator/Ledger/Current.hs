@@ -18,6 +18,7 @@ module Ouroboros.Consensus.HardFork.Combinator.Ledger.Current (
   , liftM
   , liftTicked
   , liftTickedM
+  , liftTickedM'
   ) where
 
 import           Data.Functor.Identity
@@ -59,6 +60,12 @@ liftTickedM :: Functor f
             -> Ticked (CurrentLedgerState blk) -> f (CurrentLedgerState blk)
 liftTickedM f (Ticked slot (CurrentLedgerState start cur)) =
     CurrentLedgerState start <$> f (Ticked slot cur)
+
+liftTickedM' :: Functor f
+             => (Ticked (LedgerState blk) -> f (Ticked (LedgerState blk)))
+             -> Ticked (CurrentLedgerState blk) -> f (Ticked (CurrentLedgerState blk))
+liftTickedM' f (Ticked slot (CurrentLedgerState start cur)) =
+    fmap (CurrentLedgerState start) <$> f (Ticked slot cur)
 
 {-------------------------------------------------------------------------------
   IsLedger instance
