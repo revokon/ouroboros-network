@@ -128,11 +128,11 @@ lift HardForkLedgerConfig{..} mSlot g =
          -> Extend PastLedgerState CurrentLedgerState blk blk'
     next f (SingleEraLedgerConfig cfg)
            (SingleEraLedgerConfig cfg') = Extend $ \cur -> do
-        e    <- singleEraTransition cfg (currentLedgerState cur)
-        past <- inNextEra cfg cur e
+        epoch <- singleEraTransition cfg (currentLedgerState cur)
+        past  <- inNextEra cfg cur epoch
         return (past, CurrentLedgerState {
             currentLedgerStart = pastLedgerEnd past
-          , currentLedgerState = translateLedgerStateWith f cfg cfg' $
+          , currentLedgerState = translateLedgerStateWith f cfg cfg' epoch $
                                    currentLedgerState cur
           })
 
