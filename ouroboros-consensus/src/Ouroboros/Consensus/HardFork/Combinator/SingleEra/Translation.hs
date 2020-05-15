@@ -5,6 +5,7 @@ module Ouroboros.Consensus.HardFork.Combinator.SingleEra.Translation (
     -- * Translate from one era to the next
     TranslateEraLedgerState(..)
   , TranslateEraConsensusState(..)
+  , TranslateEraLedgerView(..)
   , EraTranslation(..)
   , trivialEraTranslation
     -- * Check that eras line up
@@ -12,6 +13,8 @@ module Ouroboros.Consensus.HardFork.Combinator.SingleEra.Translation (
   , EraTransitionCheck(..)
   , trivialEraTransitionCheck
   ) where
+
+import           Data.ByteString (ByteString)
 
 import           Cardano.Prelude (NoUnexpectedThunks, OnlyCheckIsWHNF (..))
 import           Cardano.Slotting.Slot
@@ -40,13 +43,22 @@ newtype TranslateEraLedgerState blk blk' = TranslateEraLedgerState {
 newtype TranslateEraConsensusState blk blk' = TranslateEraConsensusState {
       translateConsensusStateWith :: ConsensusConfig (BlockProtocol blk)
                                   -> ConsensusConfig (BlockProtocol blk')
+                                  -> ByteString
                                   -> ConsensusState (BlockProtocol blk)
                                   -> ConsensusState (BlockProtocol blk')
+    }
+
+newtype TranslateEraLedgerView blk blk' = TranslateEraLedgerView {
+      translateLedgerViewWith :: LedgerConfig blk
+                              -> LedgerConfig blk'
+                              -> LedgerView (BlockProtocol blk)
+                              -> LedgerView (BlockProtocol blk')
     }
 
 data EraTranslation xs = EraTranslation {
       translateLedgerState    :: InPairs TranslateEraLedgerState xs
     , translateConsensusState :: InPairs TranslateEraConsensusState xs
+    , translateLedgerView     :: InPairs TranslateEraLedgerView xs
     }
   deriving NoUnexpectedThunks
        via OnlyCheckIsWHNF "EraTranslation" (EraTranslation xs)
@@ -55,6 +67,7 @@ trivialEraTranslation :: EraTranslation '[blk]
 trivialEraTranslation = EraTranslation {
       translateLedgerState    = PNil
     , translateConsensusState = PNil
+    , translateLedgerView     = PNil
     }
 
 {-------------------------------------------------------------------------------

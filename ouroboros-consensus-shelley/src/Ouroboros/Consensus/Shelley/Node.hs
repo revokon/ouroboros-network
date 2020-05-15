@@ -138,8 +138,8 @@ protocolInfoShelley genesis protVer mbCredentials =
     ledgerConfig :: LedgerConfig (ShelleyBlock c)
     ledgerConfig = mkShelleyLedgerConfig genesis epochInfo
 
-    -- TODO: This must instead be derived from the hard fork history.
-    -- <https://github.com/input-output-hk/ouroboros-network/issues/1205>
+    -- TODO When Shelley is part of the hard fork, we will construct this
+    -- 'EpochInfo' differently.
     epochInfo :: EpochInfo Identity
     epochInfo = fixedSizeEpochInfo $ sgEpochLength genesis
 

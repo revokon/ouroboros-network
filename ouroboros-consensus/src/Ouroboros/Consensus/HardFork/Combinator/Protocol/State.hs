@@ -219,7 +219,7 @@ alignConsensus HardForkConsensusConfig{..} =
     go f (SingleEraConsensusConfig cfg) (SingleEraConsensusConfig cfg') =
         Align $ \(CurrentConsensusState cur) -> (
             PastConsensusState cur 0
-          , CurrentConsensusState (translateConsensusStateWith f cfg cfg' cur)
+          , CurrentConsensusState (translateConsensusStateWith f cfg cfg' undefined cur)
           )
 
 injectValidationErr :: Injection SingleEraValidationErr xs blk
