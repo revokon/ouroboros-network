@@ -33,6 +33,7 @@ module Ouroboros.Consensus.Util (
   , dropLast
   , firstJust
   , allEqual
+  , splits
     -- * Safe variants of existing base functions
   , lastMaybe
   , safeMaximum
@@ -180,6 +181,19 @@ allEqual :: Eq a => [a] -> Bool
 allEqual []       = True
 allEqual [_]      = True
 allEqual (x:y:zs) = x == y && allEqual (y:zs)
+
+-- | Focus on one element in the list
+--
+-- E.g.
+--
+-- >    splits [1..3]
+-- > == [ ([]    , 1 , [2,3])
+-- >    , ([1]   , 2 , [3]  )
+-- >    , ([1,2] , 3 , []   )
+-- >    ]
+splits :: [a] -> [([a], a, [a])]
+splits []     = []
+splits (a:as) = ([], a, as) : map (\(xs, y, zs) -> (a:xs, y, zs)) (splits as)
 
 {-------------------------------------------------------------------------------
   Safe variants of existing base functions

@@ -42,6 +42,7 @@ module Ouroboros.Consensus.Util.Counting (
   , nonEmptyLast
   , nonEmptyInit
   , nonEmptyFromList
+  , nonEmptyMapM
   ) where
 
 import qualified Data.Foldable as Foldable
@@ -217,3 +218,11 @@ nonEmptyFromList = go (sList @xs)
         (SCons, y:ys') -> NonEmptyCons y <$> go sList ys'
         (SCons, [])    -> Nothing
         (SNil,  _)     -> Nothing
+
+nonEmptyMapM :: forall m xs a b. Applicative m
+             => (a -> m b) -> NonEmpty xs a -> m (NonEmpty xs b)
+nonEmptyMapM f = go
+  where
+    go :: NonEmpty xs' a -> m (NonEmpty xs' b)
+    go (NonEmptyOne  x)    = NonEmptyOne  <$> f x
+    go (NonEmptyCons x xs) = NonEmptyCons <$> f x <*> go xs

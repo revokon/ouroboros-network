@@ -103,7 +103,8 @@ mkEraEnd :: EraParams
 mkEraEnd params lo = maybe EraUnbounded (EraEnd . mkUpperBound params lo)
 
 -- | Compute upper bound given just the epoch number and era parameters
-mkUpperBound :: EraParams
+mkUpperBound :: HasCallStack
+             => EraParams
              -> Bound    -- ^ Lower bound
              -> EpochNo  -- ^ Upper bound
              -> Bound
@@ -197,7 +198,7 @@ data EraEnd =
 -- about the start and end of each era.
 
 -- We have at most one summary for each era, and at least one
-newtype Summary xs = Summary (NonEmpty xs EraSummary)
+newtype Summary xs = Summary { getSummary :: NonEmpty xs EraSummary }
   deriving (Eq, Show)
 
 -- WHNF is sufficient, because the counting types are all strict

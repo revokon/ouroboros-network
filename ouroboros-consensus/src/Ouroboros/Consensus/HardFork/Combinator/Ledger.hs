@@ -394,6 +394,20 @@ data AnnForecast f blk = AnnForecast {
     , annForecastNext      :: Maybe EpochNo
 
       -- | The era parameters of the era in which the forecast was constructed
+      --
+      -- NOTE: We need to be careful to distinguish between the /forecast range/
+      -- of the ledger (predicting what the 'LedgerView' will be at various
+      -- points in the future) and the 'EraParams' and its own safe zone.
+      --
+      -- Forecasting the ledger view is determined by properties of the
+      -- underlying ledger, and is in principle completely unrelated to the
+      -- 'EraParams': the 'EpochSize' and 'SlotLength' are irrelevant, the size
+      -- of the safe zone may be different, and forecasting the ledger view
+      -- will be limited even if that happens to be in the final era.
+      --
+      -- However, when we are forecasting across era boundaries, the 'EraParams'
+      -- /are/ relevant, of course: the 'EraParams' determine when those era
+      -- boundaries happen.
     , annForecastEraParams :: EraParams
     }
 
