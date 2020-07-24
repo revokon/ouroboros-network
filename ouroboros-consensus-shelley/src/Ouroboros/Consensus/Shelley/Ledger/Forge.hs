@@ -22,6 +22,7 @@ import qualified Data.Sequence.Strict as Seq
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.Config
 import           Ouroboros.Consensus.Ledger.Abstract
+import           Ouroboros.Consensus.Ledger.SupportsMempool
 
 import qualified Shelley.Spec.Ledger.BlockChain as SL
 import qualified Shelley.Spec.Ledger.Keys as SL
@@ -53,8 +54,13 @@ forgeShelleyBlock
   -> [GenTx (ShelleyBlock c)]            -- ^ Txs to add in the block
   -> TPraosProof c                       -- ^ Leader proof ('IsLeader')
   -> ShelleyBlock c
-forgeShelleyBlock cfg forgeState curNo curSlot tickedLedger txs isLeader =
-    assert (verifyBlockIntegrity tpraosSlotsPerKESPeriod blk) blk
+forgeShelleyBlock cfg forgeState curNo curSlot tickedLedger txs isLeader
+    | SL.bBodySize body > fromIntegral (maxTxCapacity tickedLedger)
+    = error $
+        "Body size too large: " <> show (SL.bBodySize body) <> " > "
+        <> show (maxTxCapacity tickedLedger)
+    | otherwise
+    = assert (verifyBlockIntegrity tpraosSlotsPerKESPeriod blk) blk
   where
     TPraosConfig { tpraosParams = TPraosParams { tpraosSlotsPerKESPeriod } } =
       configConsensus cfg
