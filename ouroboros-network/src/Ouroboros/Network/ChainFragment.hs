@@ -74,6 +74,7 @@ module Ouroboros.Network.ChainFragment (
   foldChainFragmentSpec,
   pointOnChainFragmentSpec,
   selectPointsSpec,
+  lookupBySlotFT
   ) where
 
 import           Prelude hiding (drop, filter, head, last, length, null)
