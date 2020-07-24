@@ -55,10 +55,13 @@ forgeShelleyBlock
   -> TPraosProof c                       -- ^ Leader proof ('IsLeader')
   -> ShelleyBlock c
 forgeShelleyBlock cfg forgeState curNo curSlot tickedLedger txs isLeader
-    | SL.bBodySize body > fromIntegral (maxTxCapacity tickedLedger)
+    | let txsSize  = sum (map txInBlockSize txs)
+          bodySize = fromIntegral (SL.bBodySize body)
+    , length txs > 1, bodySize > txsSize
     = error $
-        "Body size too large: " <> show (SL.bBodySize body) <> " > "
-        <> show (maxTxCapacity tickedLedger)
+        "body size > txs size: "  <> show bodySize <>
+        " < " <> show txsSize <> " tx sizes: " <>
+        show (map txInBlockSize txs)
     | otherwise
     = assert (verifyBlockIntegrity tpraosSlotsPerKESPeriod blk) blk
   where
