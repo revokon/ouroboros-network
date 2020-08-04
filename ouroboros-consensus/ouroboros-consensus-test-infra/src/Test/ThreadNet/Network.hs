@@ -624,7 +624,8 @@ runThreadNetwork systemTime ThreadNetworkArgs
     -- | Produce transactions every time the slot changes and submit them to
     -- the mempool.
     forkTxProducer :: HasCallStack
-                   => ResourceRegistry m
+                   => CoreNodeId
+                   -> ResourceRegistry m
                    -> OracularClock m
                    -> TopLevelConfig blk
                    -> Seed
@@ -632,14 +633,14 @@ runThreadNetwork systemTime ThreadNetworkArgs
                       -- ^ How to get the current ledger state
                    -> Mempool m blk TicketNo
                    -> m ()
-    forkTxProducer registry clock cfg nodeSeed getExtLedger mempool =
+    forkTxProducer coreNodeId registry clock cfg nodeSeed getExtLedger mempool =
       void $ OracularClock.forkEachSlot registry clock "txProducer" $ \curSlotNo -> do
         ledger <- atomically $ ledgerState <$> getExtLedger
         -- Combine the node's seed with the current slot number, to make sure
         -- we generate different transactions in each slot.
         let txs = runGen
                 (nodeSeed `combineWith` unSlotNo curSlotNo)
-                (testGenTxs numCoreNodes curSlotNo cfg txGenExtra ledger)
+                (testGenTxs coreNodeId numCoreNodes curSlotNo cfg txGenExtra ledger)
 
         void $ addTxs mempool txs
 
@@ -982,6 +983,7 @@ runThreadNetwork systemTime ThreadNetworkArgs
         txs0
 
       forkTxProducer
+        coreNodeId
         registry
         clock
         pInfoConfig
