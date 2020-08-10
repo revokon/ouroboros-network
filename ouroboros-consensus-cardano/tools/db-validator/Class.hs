@@ -1,11 +1,17 @@
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 
-module Analysis (HasAnalysis (..), mkTopLevelConfig) where
+module Class (
+    ByronBlockArgs (..)
+  , ShelleyBlockArgs (..)
+  , CardanoBlockArgs (..)
+  , HasAnalysis (..)
+  ) where
 
 import           Control.Monad.Except
 import qualified Data.Aeson as Aeson
@@ -17,7 +23,7 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import           GHC.Natural (Natural)
 
-import           Cardano.Binary (unAnnotated)
+import           Cardano.Binary (Raw, unAnnotated)
 import qualified Cardano.Crypto as Crypto
 
 import qualified Cardano.Chain.Block as Chain
@@ -30,14 +36,14 @@ import qualified Shelley.Spec.Ledger.PParams as SL
 import qualified Shelley.Spec.Ledger.Tx as SL
 
 import           Ouroboros.Consensus.Block
-import           Ouroboros.Consensus.Config hiding (mkTopLevelConfig)
 import           Ouroboros.Consensus.HardFork.Combinator (OneEraHash (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo
 import           Ouroboros.Consensus.Storage.ChainDB.Serialisation (SizeInBytes)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
 import qualified Ouroboros.Consensus.Byron.Ledger as Byron
-import           Ouroboros.Consensus.Byron.Node (protocolInfoByron)
+import           Ouroboros.Consensus.Byron.Node (PBftSignatureThreshold,
+                     protocolInfoByron)
 
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
@@ -55,36 +61,34 @@ import           Ouroboros.Consensus.Cardano.Node (TriggerHardFork (..),
 -------------------------------------------------------------------------------}
 
 class GetPrevHash blk => HasAnalysis blk where
-    countTxOutputs   :: blk -> Int
-    blockHeaderSize  :: blk -> SizeInBytes
-    blockTxSizes     :: blk -> [SizeInBytes]
-    knownEBBs        :: proxy blk -> Map (HeaderHash blk) (ChainHash blk)
-    protocolInfo     :: [FilePath] -- Genesis file or files.
-                     -> Bool       -- is it mainnet?
-                     -> IO (ProtocolInfo IO blk)
-
-mkTopLevelConfig :: forall blk. HasAnalysis blk
-                 => [FilePath] -- Genesis file or files.
-                 -> Bool       -- is it mainnet?
-                 -> IO (TopLevelConfig blk)
-mkTopLevelConfig fps onMainNet = pInfoConfig <$> protocolInfo @blk fps onMainNet
+    type Args blk = args | args -> blk
+    mkProtocolInfo  :: Args blk -> IO (ProtocolInfo IO blk)
+    countTxOutputs  :: blk -> Int
+    blockHeaderSize :: blk -> SizeInBytes
+    blockTxSizes    :: blk -> [SizeInBytes]
+    knownEBBs       :: proxy blk -> Map (HeaderHash blk) (ChainHash blk)
 
 {-------------------------------------------------------------------------------
   ByronBlock instance
 -------------------------------------------------------------------------------}
 
 instance HasAnalysis ByronBlock where
+    type Args ByronBlock = ByronBlockArgs
+    mkProtocolInfo ByronBlockArgs {..} = do
+      config <- openGenesisByron configFileByron genesisHash requiresNetworkMagic
+      return $ mkByronProtocolInfo config threshold
     countTxOutputs = aBlockOrBoundary (const 0) countTxOutputsByron
     blockHeaderSize = fromIntegral .
       aBlockOrBoundary blockBoundaryHeaderSize blockHeaderSizeByron
     blockTxSizes = aBlockOrBoundary (const []) blockTxSizesByron
     knownEBBs = const Byron.knownEBBs
-    protocolInfo [configFile] onMainNet = do
-      genesisConfig <- openGenesisByron configFile onMainNet
-      return $ mkByronProtocolInfo genesisConfig
-    protocolInfo ls _onMainNet =
-      error $
-        "a single genesis file is needed for pure Byron. Given " ++ show ls
+
+data ByronBlockArgs = ByronBlockArgs {
+    configFileByron      :: FilePath
+  , requiresNetworkMagic :: Bool
+  , genesisHash          :: Maybe (Crypto.Hash Raw)
+  , threshold            :: Maybe PBftSignatureThreshold
+  }
 
 -- | Equivalent of 'either' for 'ABlockOrBoundary'.
 aBlockOrBoundary :: (Chain.ABoundaryBlock ByteString -> a)
@@ -125,24 +129,28 @@ blockTxSizesByron block =
     Chain.ABody{ bodyTxPayload } = blockBody
     Chain.ATxPayload{ aUnTxPayload = blockTxAuxs } = bodyTxPayload
 
-openGenesisByron :: FilePath -> Bool -> IO Genesis.Config
-openGenesisByron configFile onMainNet = do
-    genesisHash <- either (error . show) return =<< runExceptT
-      (snd <$> Genesis.readGenesisData configFile)
+openGenesisByron :: FilePath -> Maybe (Crypto.Hash Raw) -> Bool -> IO Genesis.Config
+openGenesisByron configFile mHash onMainNet = do
+    genesisHash <- case mHash of
+      Nothing -> either (error . show) return =<< runExceptT
+        (Genesis.unGenesisHash . snd <$> Genesis.readGenesisData configFile)
+      Just hash -> return hash
     genesisConfig <- either (error . show) return =<< runExceptT
       (Genesis.mkConfigFromFile
         (if onMainNet -- transactions on testnet include magic number
           then Crypto.RequiresNoMagic
           else Crypto.RequiresMagic)
         configFile
-        (Genesis.unGenesisHash genesisHash))
+        genesisHash)
     return genesisConfig
 
-mkByronProtocolInfo :: Genesis.Config -> ProtocolInfo IO ByronBlock
-mkByronProtocolInfo genesisConfig =
+mkByronProtocolInfo :: Genesis.Config
+                    -> Maybe PBftSignatureThreshold
+                    -> ProtocolInfo IO ByronBlock
+mkByronProtocolInfo genesisConfig signatureThreshold =
     protocolInfoByron
       genesisConfig
-      Nothing
+      signatureThreshold
       (Update.ProtocolVersion 1 0 0)
       (Update.SoftwareVersion (Update.ApplicationName "db-analyse") 2)
       Nothing
@@ -151,7 +159,12 @@ mkByronProtocolInfo genesisConfig =
   ShelleyBlock instance
 -------------------------------------------------------------------------------}
 
-instance TPraosCrypto c => HasAnalysis (ShelleyBlock c) where
+instance HasAnalysis (ShelleyBlock TPraosStandardCrypto) where
+    type Args (ShelleyBlock TPraosStandardCrypto) = ShelleyBlockArgs
+    mkProtocolInfo ShelleyBlockArgs {..}  = do
+      config <- either (error . show) return =<<
+        Aeson.eitherDecodeFileStrict' configFileShelley
+      return $ mkShelleyProtocolInfo config initialNonce
     countTxOutputs blk = case Shelley.shelleyBlockRaw blk of
       SL.Block _ (SL.TxSeq txs) -> sum $ fmap countOutputs txs
     blockHeaderSize =
@@ -160,32 +173,40 @@ instance TPraosCrypto c => HasAnalysis (ShelleyBlock c) where
       SL.Block _ (SL.TxSeq txs) ->
         toList $ fmap (fromIntegral . BL.length . SL.txFullBytes) txs
     knownEBBs = const Map.empty
-    protocolInfo [configFile] _onMainNet = do
-      genesis  <- either (error . show) return =<< Aeson.eitherDecodeFileStrict' configFile
-      return $ mkShelleyProtocolInfo genesis
-    protocolInfo ls _onMainNet =
-      error $
-        "A single genesis file is needed for pure Shelley. Given " ++ show ls
+
+data ShelleyBlockArgs = ShelleyBlockArgs {
+    configFileShelley :: FilePath
+  , initialNonce      :: Nonce
+  } deriving Show
 
 mkShelleyProtocolInfo :: forall c. TPraosCrypto c
                       => ShelleyGenesis c
+                      -> Nonce
                       -> ProtocolInfo IO (ShelleyBlock c)
-mkShelleyProtocolInfo genesis =
+mkShelleyProtocolInfo genesis initialNonce =
     protocolInfoShelley
       genesis
-      NeutralNonce -- TODO
+      initialNonce
       2000
       (SL.ProtVer 0 0)
       Nothing
 
 countOutputs :: Shelley.Crypto c => SL.Tx c -> Int
-countOutputs tx  = length $ SL._outputs $ SL._body tx
+countOutputs tx = length $ SL._outputs $ SL._body tx
 
 {-------------------------------------------------------------------------------
   CardanoBlock instance
 -------------------------------------------------------------------------------}
 
-instance TPraosCrypto c => HasAnalysis (CardanoBlock c) where
+instance HasAnalysis (CardanoBlock TPraosStandardCrypto) where
+  type Args (CardanoBlock TPraosStandardCrypto) = CardanoBlockArgs
+  mkProtocolInfo CardanoBlockArgs {..} = do
+    let ByronBlockArgs {..}   = byronArgs
+    let ShelleyBlockArgs {..} = shelleyArgs
+    byronConfig   <- openGenesisByron configFileByron genesisHash requiresNetworkMagic
+    shelleyConfig <- either (error . show) return =<<
+      Aeson.eitherDecodeFileStrict' configFileShelley
+    return $ mkCardanoProtocolInfo byronConfig shelleyConfig threshold initialNonce
   countTxOutputs blk = case blk of
     Cardano.BlockByron b    -> countTxOutputs b
     Cardano.BlockShelley sh -> countTxOutputs sh
@@ -197,27 +218,27 @@ instance TPraosCrypto c => HasAnalysis (CardanoBlock c) where
     Cardano.BlockShelley sh -> blockTxSizes sh
   knownEBBs _ = Map.mapKeys castHeaderHash . Map.map castChainHash $
     knownEBBs (Proxy @ByronBlock)
-  protocolInfo [byronGenesis, shelleyGenesis] onMainNet = do
-    byronConfig <- openGenesisByron byronGenesis onMainNet
-    shelleyConfig <- either (error . show) return =<< Aeson.eitherDecodeFileStrict' shelleyGenesis
-    return $ mkCardanoProtocolInfo byronConfig shelleyConfig
-  protocolInfo ls _onMainNet =
-    error $
-      "Two genesis files are needed for Cardano. Given " ++ show ls
+
+data CardanoBlockArgs = CardanoBlockArgs {
+    byronArgs   :: ByronBlockArgs
+  , shelleyArgs :: ShelleyBlockArgs
+  }
 
 mkCardanoProtocolInfo :: forall c. TPraosCrypto c
                       => Genesis.Config
                       -> ShelleyGenesis c
+                      -> Maybe PBftSignatureThreshold
+                      -> Nonce
                       -> ProtocolInfo IO (CardanoBlock c)
-mkCardanoProtocolInfo byronConfig shelleyConfig =
+mkCardanoProtocolInfo byronConfig shelleyConfig signatureThreshold initialNonce =
     protocolInfoCardano
       byronConfig
-      Nothing
+      signatureThreshold
       (Update.ProtocolVersion 1 0 0)
-      (Update.SoftwareVersion (Update.ApplicationName "db-analyse") 2)
+      (Update.SoftwareVersion (Update.ApplicationName "db-validator") 2)
       Nothing
       shelleyConfig
-      NeutralNonce -- TODO
+      initialNonce
       (SL.ProtVer 2 0)
       2000
       Nothing
