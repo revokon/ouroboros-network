@@ -1,13 +1,13 @@
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
 
 module Analysis (
     AnalysisName (..)
@@ -41,8 +41,8 @@ import qualified Ouroboros.Consensus.Storage.ChainDB.Impl.ImmDB as ImmDB
                      (withImmDB)
 import qualified Ouroboros.Consensus.Storage.ImmutableDB.API as ImmDB
 
-import           Class (HasAnalysis)
-import qualified Class
+import           HasAnalysis (HasAnalysis)
+import qualified HasAnalysis
 
 {-------------------------------------------------------------------------------
   Run the requested analysis
@@ -105,7 +105,7 @@ countTxOutputs _cfg immDB rr = do
           , show countCum
           ]
       where
-        count = Class.countTxOutputs blk
+        count = HasAnalysis.countTxOutputs blk
         slotNo = blockSlot blk
 
 {-------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ showBlockHeaderSize _cfg immDB rr = do
           ]
       where
         slotNo = blockSlot blk
-        blockHdrSz = Class.blockHeaderSize blk
+        blockHdrSz = HasAnalysis.blockHeaderSize blk
 
 {-------------------------------------------------------------------------------
   Analysis: show the total transaction sizes in bytes per block
@@ -149,7 +149,7 @@ showBlockTxsSize _cfg immDB rr = processAll immDB rr process
         ]
       where
         txSizes :: [SizeInBytes]
-        txSizes = Class.blockTxSizes blk
+        txSizes = HasAnalysis.blockTxSizes blk
 
         numBlockTxs :: Int
         numBlockTxs = length txSizes
@@ -179,7 +179,7 @@ showEBBs cfg immDB rr = do
               , show (blockPrevHash (configCodec cfg) blk)
               , show (    Map.lookup
                             (blockHash blk)
-                            (Class.knownEBBs (Proxy @blk))
+                            (HasAnalysis.knownEBBs (Proxy @blk))
                        == Just (blockPrevHash (configCodec cfg) blk)
                      )
               ]
