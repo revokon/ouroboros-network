@@ -167,3 +167,4 @@ executable db-validator
                        -fno-ignore-asserts
                        -threaded
                        -rtsopts
+                       "-with-rtsopts=-T -I0 -N2 -A16m"
