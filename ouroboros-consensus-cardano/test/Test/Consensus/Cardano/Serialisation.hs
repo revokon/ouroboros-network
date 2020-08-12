@@ -38,7 +38,7 @@ import           Test.Util.Serialisation.Roundtrip
 
 import           Test.Consensus.Shelley.MockCrypto hiding (Block)
 
-import           Test.Consensus.Cardano.Generators (epochSlots, k)
+import           Test.Consensus.Cardano.Generators (epochSlots)
 
 tests :: TestTree
 tests = testGroup "Cardano"
@@ -65,7 +65,7 @@ tests = testGroup "Cardano"
 
 testCodecCfg :: CardanoCodecConfig (TPraosMockCrypto ShortHash)
 testCodecCfg =
-  CardanoCodecConfig (ByronCodecConfig epochSlots k) ShelleyCodecConfig
+  CardanoCodecConfig (ByronCodecConfig epochSlots) ShelleyCodecConfig
 
 dictNestedHdr
   :: forall a.

@@ -175,14 +175,11 @@ protocolInfoByron genesisConfig mSigThresh pVer sVer mLeader =
           return . byronBlockForging <$> mLeader
       }
 
-protocolClientInfoByron :: EpochSlots
-                        -> SecurityParam
-                        -> ProtocolClientInfo ByronBlock
-protocolClientInfoByron epochSlots securityParam  =
+protocolClientInfoByron :: EpochSlots -> ProtocolClientInfo ByronBlock
+protocolClientInfoByron epochSlots =
     ProtocolClientInfo {
       pClientInfoCodecConfig = ByronCodecConfig {
-          getByronEpochSlots    = epochSlots
-        , getByronSecurityParam = securityParam
+          getByronEpochSlots = epochSlots
         }
     }
 
