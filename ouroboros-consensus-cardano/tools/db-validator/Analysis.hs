@@ -223,15 +223,17 @@ withImmDB :: forall blk a.
           -> ChunkInfo
           -> ResourceRegistry IO
           -> Bool -- Verbose
+          -> ValidationPolicy
           -> (ImmDB IO blk -> IO a)
           -> IO a
-withImmDB fp cfg chunkInfo registry verbose = ImmDB.withImmDB args
+withImmDB fp cfg chunkInfo registry verbose validationPolicy =
+    ImmDB.withImmDB args
   where
     args :: ImmDbArgs IO blk
     args = (defaultArgs fp) {
           immCodecConfig    = configCodec cfg
         , immChunkInfo      = chunkInfo
-        , immValidation     = ValidateMostRecentChunk
+        , immValidation     = validationPolicy
         , immCheckIntegrity = nodeCheckIntegrity cfg
         , immTracer         = tracer
         , immRegistry       = registry

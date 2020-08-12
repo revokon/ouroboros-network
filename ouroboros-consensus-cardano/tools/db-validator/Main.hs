@@ -13,6 +13,7 @@
 module Main (main) where
 
 import           Data.Foldable (asum)
+import           Data.Maybe (fromMaybe)
 import           Options.Applicative
 
 import           Control.Tracer (contramap, debugTracer, nullTracer)
@@ -56,11 +57,12 @@ warnUnusedFlags CmdLine{..} = case (analysis, onlyImmDB) of
   _ -> return ()
 
 data CmdLine = CmdLine {
-    dbDir     :: FilePath
-  , verbose   :: Bool
-  , onlyImmDB :: Bool
-  , blockType :: BlockType
-  , analysis  :: Maybe AnalysisName
+    dbDir         :: FilePath
+  , verbose       :: Bool
+  , onlyImmDB     :: Bool
+  , immValidation :: Maybe ImmDB.ValidationPolicy
+  , blockType     :: BlockType
+  , analysis      :: Maybe AnalysisName
   }
 
 data BlockType =
@@ -87,8 +89,21 @@ parseCmdLine = CmdLine
             long "onlyImmDB"
           , help "Validate only the immutable DB (e.g. do not do ledger validation)"
           ])
+    <*> parseValidationPolicy
     <*> blockTypeParser
     <*> parseAnalysis
+
+parseValidationPolicy :: Parser (Maybe ImmDB.ValidationPolicy)
+parseValidationPolicy = parseMaybe $ asum [
+      flag' ImmDB.ValidateMostRecentChunk $ mconcat [
+          long "most-recent-chunk"
+        , help "Validate only the most recent chunk stored on disk"
+        ]
+    , flag' ImmDB.ValidateAllChunks $ mconcat [
+          long "all-chunks"
+        , help "Validate all chunks stored on disk"
+        ]
+    ]
 
 parseAnalysis :: Parser (Maybe AnalysisName)
 parseAnalysis = parseMaybe $ asum [
@@ -196,19 +211,28 @@ validateOrAnalyse :: forall blk.
 validateOrAnalyse cmd@CmdLine {..} args = do
     protocolInfo <- mkProtocolInfo args
     case analysis of
-      Nothing           -> validate dbDir protocolInfo onlyImmDB verbose
-      Just analysisName -> analyse cmd analysisName protocolInfo
+      Nothing           ->
+        validate dbDir protocolInfo onlyImmDB verbose immValidation
+      Just analysisName ->
+        analyse cmd analysisName protocolInfo immValidation
 
 analyse :: forall blk. (RunNode blk, HasAnalysis blk)
-        => CmdLine -> AnalysisName -> ProtocolInfo IO blk -> IO ()
-analyse CmdLine{..} analysisName protocolInfo =
+        => CmdLine
+        -> AnalysisName
+        -> ProtocolInfo IO blk
+        -> Maybe ImmDB.ValidationPolicy
+        -> IO ()
+analyse CmdLine{..} analysisName protocolInfo mPolicy =
     withRegistry $ \registry ->
-      Analysis.withImmDB dbDir cfg chunkInfo registry verbose $ \immDB -> do
-        runAnalysis analysisName cfg immDB registry
-        putStrLn "Done"
+      Analysis.withImmDB dbDir cfg chunkInfo registry verbose validationPolicy
+        $ \immDB -> do
+          runAnalysis analysisName cfg immDB registry
+          putStrLn "Done"
   where
-    cfg       = pInfoConfig protocolInfo
-    chunkInfo = nodeImmDbChunkInfo cfg
+    cfg              = pInfoConfig protocolInfo
+    chunkInfo        = nodeImmDbChunkInfo cfg
+    -- the default value for analysis is 'ValidateMostRecentChunk'
+    validationPolicy = fromMaybe ImmDB.ValidateMostRecentChunk mPolicy
 
 validate
   :: (Node.RunNode blk, Show (Header blk))
@@ -216,8 +240,9 @@ validate
   -> ProtocolInfo IO blk
   -> Bool -- Immutable DB only?
   -> Bool -- Verbose
+  -> Maybe ImmDB.ValidationPolicy
   -> IO ()
-validate dbDir protocolInfo onlyImmDB verbose =
+validate dbDir protocolInfo onlyImmDB verbose mPolicy =
     withRegistry $ \registry -> do
       let chainDbArgs = mkChainDbArgs registry InFuture.dontCheck
           (immDbArgs, _, _, _) = fromChainDbArgs chainDbArgs
@@ -238,10 +263,11 @@ validate dbDir protocolInfo onlyImmDB verbose =
       | otherwise = nullTracer
 
     chunkInfo  = Node.nodeImmDbChunkInfo cfg
-
+    -- the default value for validate is 'ValidateAllChunks'
+    validationPolicy = fromMaybe ImmDB.ValidateAllChunks mPolicy
     mkChainDbArgs registry btime =
       let args = Node.mkChainDbArgs tracer registry btime
                    dbDir cfg initLedger chunkInfo
       in args {
-          ChainDB.cdbImmValidation = ImmDB.ValidateAllChunks
+          ChainDB.cdbImmValidation = validationPolicy
         }
